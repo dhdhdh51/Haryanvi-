@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Haryanvi translate key and the enter key. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/hy_accent" />
+            <corners android:radius="7dp" />
+        </shape>
+    </item>
+    <item android:state_enabled="false">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/hy_key_special" />
+            <corners android:radius="7dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/hy_key_accent" />
+            <corners android:radius="7dp" />
+        </shape>
+    </item>
+</selector>

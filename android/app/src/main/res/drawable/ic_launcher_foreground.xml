@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Launcher icon foreground: a chat bubble whose tail turns into a second,
+    smaller bubble — one message going in, a Haryanvi one coming out.
+    Drawn on the adaptive-icon 108dp canvas with the 72dp safe zone respected.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Incoming message bubble -->
+    <path
+        android:pathData="M30,28 h34 a10,10 0 0 1 10,10 v18 a10,10 0 0 1 -10,10 h-20 l-12,10 v-10 h-2 a10,10 0 0 1 -10,-10 v-18 a10,10 0 0 1 10,-10 z"
+        android:fillColor="#4F8CFF" />
+
+    <!-- Outgoing Haryanvi bubble, overlapping to show the conversion -->
+    <path
+        android:pathData="M56,52 h22 a9,9 0 0 1 9,9 v12 a9,9 0 0 1 -9,9 h-1 v8 l-10,-8 h-11 a9,9 0 0 1 -9,-9 v-12 a9,9 0 0 1 9,-9 z"
+        android:fillColor="#A63D57" />
+
+    <!-- Three dots inside the first bubble -->
+    <path
+        android:fillColor="#101728"
+        android:pathData="M34,46 a3.4,3.4 0 1 0 6.8,0 a3.4,3.4 0 1 0 -6.8,0 z" />
+    <path
+        android:fillColor="#101728"
+        android:pathData="M45,46 a3.4,3.4 0 1 0 6.8,0 a3.4,3.4 0 1 0 -6.8,0 z" />
+    <path
+        android:fillColor="#101728"
+        android:pathData="M56,46 a3.4,3.4 0 1 0 6.8,0 a3.4,3.4 0 1 0 -6.8,0 z"
+        android:fillAlpha="0.45" />
+
+    <!-- Tick inside the Haryanvi bubble: the translated message is ready -->
+    <path
+        android:strokeColor="#FFE8ECF4"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M62,67 l5,5 l10,-11" />
+
+</vector>

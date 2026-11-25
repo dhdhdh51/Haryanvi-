@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug-only overlay.
+
+    Allows plain HTTP so a developer can point the app at a local backend
+    (php -S 127.0.0.1:8080). Release builds inherit the Android default for
+    targetSdk 28+, which blocks cleartext entirely.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:usesCleartextTraffic="true" />
+
+</manifest>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash mark. The system draws this centred on the splash background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp"
+    android:height="160dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M30,28 h34 a10,10 0 0 1 10,10 v18 a10,10 0 0 1 -10,10 h-20 l-12,10 v-10 h-2 a10,10 0 0 1 -10,-10 v-18 a10,10 0 0 1 10,-10 z"
+        android:fillColor="#4F8CFF" />
+
+    <path
+        android:pathData="M56,52 h22 a9,9 0 0 1 9,9 v12 a9,9 0 0 1 -9,9 h-1 v8 l-10,-8 h-11 a9,9 0 0 1 -9,-9 v-12 a9,9 0 0 1 9,-9 z"
+        android:fillColor="#A63D57" />
+
+    <path
+        android:strokeColor="#FFE8ECF4"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M62,67 l5,5 l10,-11" />
+
+</vector>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Palette shared between Compose and the classic-View surfaces
+    (keyboard, floating bubble), so the keyboard matches the app exactly.
+
+    Direction: deep navy / charcoal with electric blue and maroon accents.
+-->
+<resources>
+
+    <!-- Surfaces -->
+    <color name="hy_background">#FF0B0F1A</color>
+    <color name="hy_surface">#FF121829</color>
+    <color name="hy_surface_raised">#FF1A2235</color>
+    <color name="hy_surface_pressed">#FF26324B</color>
+    <color name="hy_border">#FF263149</color>
+
+    <!-- Text -->
+    <color name="hy_text">#FFE8ECF4</color>
+    <color name="hy_text_muted">#FF9AA7C0</color>
+    <color name="hy_text_faint">#FF6B7894</color>
+
+    <!-- Accents -->
+    <color name="hy_accent">#FF4F8CFF</color>
+    <color name="hy_accent_dim">#FF2F6AE0</color>
+    <color name="hy_maroon">#FFA63D57</color>
+    <color name="hy_maroon_light">#FFE58AA0</color>
+
+    <!-- Status -->
+    <color name="hy_success">#FF35C48A</color>
+    <color name="hy_warning">#FFE5A23C</color>
+    <color name="hy_danger">#FFE5556F</color>
+
+    <!-- Keyboard-specific -->
+    <color name="hy_key_bg">#FF1E2739</color>
+    <color name="hy_key_bg_pressed">#FF2F3B55</color>
+    <color name="hy_key_special">#FF161E2E</color>
+    <color name="hy_key_accent">#FF2F6AE0</color>
+    <color name="hy_keyboard_bg">#FF0D121F</color>
+
+    <!-- Launcher icon -->
+    <color name="ic_launcher_background">#FF101728</color>
+
+</resources>

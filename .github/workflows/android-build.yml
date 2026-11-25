@@ -1,0 +1,184 @@
+name: Android build
+
+# Builds the APK and runs every automated check.
+#
+# Debug APK   : built on every push and pull request, published as an artifact.
+# Release APK : built on pushes to main and on tags. Signed only when the
+#               signing secrets are configured; otherwise an unsigned APK is
+#               published so forks still get a usable pipeline.
+#
+# Required repository secrets for a signed release (Settings → Secrets and
+# variables → Actions):
+#   KEYSTORE_BASE64     base64 of your .jks   (base64 -w0 release.jks)
+#   KEYSTORE_PASSWORD   keystore password
+#   KEY_ALIAS           key alias
+#   KEY_PASSWORD        key password
+#
+# Optional repository variable:
+#   API_BASE_URL        backend URL baked into the build, e.g.
+#                       https://your-domain.com/   (default: https://example.com/)
+#
+# No key, password or URL is ever stored in the repository.
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-build.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-build.yml'
+  workflow_dispatch:
+    inputs:
+      build_release:
+        description: 'Also build a release APK'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: android
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      # ---- 1. Source --------------------------------------------------
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      # ---- 2. JDK -----------------------------------------------------
+      # AGP 8.7 requires JDK 17; the app also compiles to a 17 target.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # ---- 3. Android SDK --------------------------------------------
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/gradle/libs.versions.toml', 'android/**/*.gradle.kts') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # ---- 4. Checks --------------------------------------------------
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Android lint
+        run: ./gradlew --no-daemon lintDebug
+
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            android/app/build/reports/tests/
+            android/app/build/reports/lint-results-debug.html
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # ---- 5. Debug APK ----------------------------------------------
+      - name: Build debug APK
+        run: >-
+          ./gradlew --no-daemon assembleDebug
+          -PapiBaseUrl=${{ vars.API_BASE_URL || 'https://example.com/' }}
+
+      - name: Publish debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: haryanvi-ai-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      # ---- 6. Release APK --------------------------------------------
+      # Signing secrets are optional: a fork without them still gets an
+      # unsigned release APK rather than a failed build.
+      - name: Check for signing secrets
+        id: signing
+        if: github.event_name == 'push' || inputs.build_release
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No signing secrets configured — the release APK will be unsigned."
+          fi
+
+      - name: Decode keystore
+        if: steps.signing.outputs.available == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          # Fail loudly rather than producing a mysteriously unsigned build.
+          if [ ! -s "$RUNNER_TEMP/release.jks" ]; then
+            echo "::error::KEYSTORE_BASE64 did not decode to a keystore file."
+            exit 1
+          fi
+
+      - name: Build signed release APK
+        if: steps.signing.outputs.available == 'true'
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: >-
+          ./gradlew --no-daemon assembleRelease
+          -PapiBaseUrl=${{ vars.API_BASE_URL || 'https://example.com/' }}
+
+      - name: Build unsigned release APK
+        if: (github.event_name == 'push' || inputs.build_release) && steps.signing.outputs.available != 'true'
+        run: >-
+          ./gradlew --no-daemon assembleRelease
+          -PapiBaseUrl=${{ vars.API_BASE_URL || 'https://example.com/' }}
+
+      - name: Verify the release signature
+        if: steps.signing.outputs.available == 'true'
+        run: |
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          "$ANDROID_HOME"/build-tools/35.0.0/apksigner verify --verbose "$APK"
+
+      - name: Publish release APK
+        if: github.event_name == 'push' || inputs.build_release
+        uses: actions/upload-artifact@v4
+        with:
+          name: haryanvi-ai-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 90
+          if-no-files-found: error
+
+      # ---- 7. Always remove the keystore -----------------------------
+      - name: Remove the decoded keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup policy for Android 11 and below (fullBackupContent).
+
+    This file uses include-only semantics: once a single <include> is present,
+    Android backs up *nothing else*. That is exactly the policy we want, so
+    there are deliberately no <exclude> entries.
+
+    What travels : the DataStore file holding UI preferences (chosen dialect,
+                   tone, output script, theme).
+
+    What does not: the auth token (SharedPreferences "haryanvi_secure" — it is
+                   wrapped by a hardware-backed Keystore key and would be
+                   useless on another device anyway), and the translation
+                   history database, which is private user text.
+-->
+<full-backup-content>
+    <include domain="file" path="datastore/haryanvi_settings.preferences_pb" />
+</full-backup-content>

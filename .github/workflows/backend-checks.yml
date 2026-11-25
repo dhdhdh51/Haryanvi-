@@ -1,0 +1,181 @@
+name: Backend checks
+
+# Lints and tests the PHP backend against a real MySQL service, and runs the
+# integration suite against the API using the mock AI provider fixture.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-checks.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # The project targets 8.2+; test the floor and a current release.
+        php: ['8.2', '8.3']
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: haryanvi_ai
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo, pdo_mysql, mbstring, openssl, curl, json
+          coverage: none
+          tools: none
+
+      # ---- Static checks ---------------------------------------------
+      - name: Lint every PHP file
+        run: |
+          fail=0
+          while IFS= read -r file; do
+            if ! php -l "$file" > /dev/null 2>&1; then
+              echo "::error file=$file::Syntax error"
+              php -l "$file" || true
+              fail=1
+            fi
+          done < <(find backend -name '*.php' -type f)
+          echo "Checked $(find backend -name '*.php' -type f | wc -l) files."
+          exit $fail
+
+      - name: Fail if a secret was committed
+        run: |
+          if [ -f backend/config/config.php ]; then
+            echo "::error::backend/config/config.php must never be committed."
+            exit 1
+          fi
+          # A real provider key in the repository would be a serious leak.
+          if grep -rInE "(sk-[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{30,})" backend --include='*.php' --include='*.sql'; then
+            echo "::error::A value that looks like a live API key is present in the repository."
+            exit 1
+          fi
+          echo "No committed secrets found."
+
+      # ---- Unit tests ------------------------------------------------
+      - name: Unit tests
+        run: php backend/tests/run.php
+
+      # ---- Database --------------------------------------------------
+      - name: Load schema and seed data
+        run: |
+          mysql -h 127.0.0.1 -u root haryanvi_ai < backend/database/schema.sql
+          mysql -h 127.0.0.1 -u root haryanvi_ai < backend/database/seed.sql
+          echo "Tables created:"
+          mysql -h 127.0.0.1 -u root -N -B -e "SHOW TABLES;" haryanvi_ai
+
+      - name: Verify the seeded reference data
+        run: |
+          mysql -h 127.0.0.1 -u root -N -B haryanvi_ai -e "
+            SELECT CONCAT('dialects=', COUNT(*)) FROM dialects;
+            SELECT CONCAT('tones=', COUNT(*)) FROM tone_presets;
+            SELECT CONCAT('vocabulary=', COUNT(*)) FROM dialect_vocabulary;
+            SELECT CONCAT('settings=', COUNT(*)) FROM app_settings;
+          "
+
+      # ---- Integration ------------------------------------------------
+      - name: Write the test configuration
+        run: |
+          mkdir -p backend/storage/logs
+          KEY=$(php -r 'echo "base64:" . base64_encode(random_bytes(32));')
+          cat > backend/config/config.php <<PHPCONF
+          <?php
+          return [
+              'app' => ['env' => 'testing', 'debug' => true, 'url' => 'http://127.0.0.1:8080', 'timezone' => 'UTC'],
+              'db' => ['host' => '127.0.0.1', 'port' => 3306, 'name' => 'haryanvi_ai', 'user' => 'root', 'pass' => '', 'charset' => 'utf8mb4', 'socket' => null],
+              'security' => ['encryption_key' => '$KEY', 'force_https' => false, 'session_name' => 'hy_admin_sess', 'token_ttl_days' => 90, 'cors_origins' => [], 'max_body_bytes' => 65536],
+              'logging' => ['path' => __DIR__ . '/../storage/logs', 'level' => 'debug'],
+          ];
+          PHPCONF
+          php -l backend/config/config.php
+
+      - name: Start the mock AI provider
+        run: |
+          php backend/tests/support/generate-cert.php "$RUNNER_TEMP/mockai"
+          nohup python3 backend/tests/support/mock-ai-server.py \
+            --port 8443 --cert-dir "$RUNNER_TEMP/mockai" > "$RUNNER_TEMP/mockai.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -s --cacert "$RUNNER_TEMP/mockai/mock-ai.crt" https://127.0.0.1:8443/__requests > /dev/null && break
+            sleep 1
+          done
+          curl -s --cacert "$RUNNER_TEMP/mockai/mock-ai.crt" https://127.0.0.1:8443/__requests
+
+      - name: Register the mock provider
+        env:
+          CURL_CA_BUNDLE: ${{ runner.temp }}/mockai/mock-ai.crt
+        run: |
+          php -d curl.cainfo="$CURL_CA_BUNDLE" backend/bin/provider.php add \
+            --name="Mock AI (CI)" \
+            --driver=openai_compatible \
+            --base-url=https://127.0.0.1:8443/v1 \
+            --model=mock-ok \
+            --key=sk-mock-ci-key-0000 \
+            --timeout=10 --retries=1
+
+      - name: Start the API server
+        env:
+          CURL_CA_BUNDLE: ${{ runner.temp }}/mockai/mock-ai.crt
+        run: |
+          nohup php -d curl.cainfo="$CURL_CA_BUNDLE" -d openssl.cafile="$CURL_CA_BUNDLE" \
+            -S 127.0.0.1:8080 -t backend backend/tests/support/dev-router.php \
+            > "$RUNNER_TEMP/php-server.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -s http://127.0.0.1:8080/api/v1/health > /dev/null && break
+            sleep 1
+          done
+          curl -s http://127.0.0.1:8080/api/v1/health
+
+      - name: Integration tests
+        env:
+          HARYANVI_TEST_URL: http://127.0.0.1:8080
+          HARYANVI_MOCK_URL: https://127.0.0.1:8443/v1
+          CURL_CA_BUNDLE: ${{ runner.temp }}/mockai/mock-ai.crt
+        run: |
+          export HARYANVI_PROVIDER_CLI="php -d curl.cainfo=$CURL_CA_BUNDLE $PWD/backend/bin/provider.php"
+          php -d curl.cainfo="$CURL_CA_BUNDLE" backend/tests/run.php --all
+
+      - name: Show server logs on failure
+        if: failure()
+        run: |
+          echo "--- php server ---"; tail -60 "$RUNNER_TEMP/php-server.log" || true
+          echo "--- mock ai ---";    tail -40 "$RUNNER_TEMP/mockai.log" || true
+          echo "--- app log ---";    tail -80 backend/storage/logs/*.log || true
+
+      - name: Remove the test configuration
+        if: always()
+        run: rm -f backend/config/config.php

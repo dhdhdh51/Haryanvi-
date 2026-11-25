@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The translation panel that opens when the floating bubble is tapped.
+
+    Classic Views rather than Compose: this is attached straight to the window
+    manager as an overlay, where a plain ViewGroup is simpler and more
+    predictable. Tints use android:tint rather than app:tint because the
+    service inflates these views without an AppCompat delegate.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/panel_background"
+    android:padding="14dp"
+    android:elevation="12dp">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/panel_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/floating_title"
+            android:textColor="@color/hy_text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/panel_open_app"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/floating_open_app"
+            android:padding="7dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_translate"
+            android:tint="@color/hy_text_muted" />
+
+        <ImageButton
+            android:id="@+id/panel_close"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/action_close"
+            android:padding="7dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_close"
+            android:tint="@color/hy_text_muted" />
+    </LinearLayout>
+
+    <!-- Input -->
+    <EditText
+        android:id="@+id/panel_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/text_field_background"
+        android:gravity="top|start"
+        android:hint="@string/translate_input_hint"
+        android:importantForAutofill="no"
+        android:inputType="textMultiLine"
+        android:maxLines="4"
+        android:minLines="2"
+        android:padding="10dp"
+        android:textColor="@color/hy_text"
+        android:textColorHint="@color/hy_text_faint"
+        android:textSize="15sp" />
+
+    <!-- Explains why a deliberate paste tap is required -->
+    <TextView
+        android:id="@+id/panel_clipboard_note"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/floating_clipboard_note"
+        android:textColor="@color/hy_text_faint"
+        android:textSize="11sp" />
+
+    <!-- Actions -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/panel_paste"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@drawable/key_background_special"
+            android:text="@string/floating_paste_button"
+            android:textAllCaps="false"
+            android:textColor="@color/hy_text"
+            android:textSize="13sp" />
+
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="1dp" />
+
+        <Button
+            android:id="@+id/panel_translate"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1.2"
+            android:background="@drawable/key_background_accent"
+            android:text="@string/translate_action"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- Result -->
+    <TextView
+        android:id="@+id/panel_result"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/text_field_background"
+        android:lineSpacingExtra="6sp"
+        android:padding="12dp"
+        android:textColor="@color/hy_text"
+        android:textIsSelectable="true"
+        android:textSize="17sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/panel_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="@color/hy_text_muted"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <!-- Result actions -->
+    <LinearLayout
+        android:id="@+id/panel_result_actions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/panel_copy"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_weight="1"
+            android:background="@drawable/key_background_accent"
+            android:text="@string/translate_copy"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="13sp" />
+
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="1dp" />
+
+        <Button
+            android:id="@+id/panel_share"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_weight="1"
+            android:background="@drawable/key_background_special"
+            android:text="@string/translate_share"
+            android:textAllCaps="false"
+            android:textColor="@color/hy_text"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+</LinearLayout>

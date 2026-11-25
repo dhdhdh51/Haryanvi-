@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        PERMISSIONS — deliberately minimal.
+
+        INTERNET              : talk to the translation API.
+        ACCESS_NETWORK_STATE  : show "you're offline" instead of a timeout.
+        SYSTEM_ALERT_WINDOW   : the optional floating bubble. The user grants
+                                this from the app's Floating settings screen
+                                and can revoke it any time; the app works
+                                fully without it.
+        FOREGROUND_SERVICE(+_SPECIAL_USE)
+                              : keeps the bubble alive while it is on screen,
+                                with a visible, dismissible notification.
+        POST_NOTIFICATIONS    : required from Android 13 to show that
+                                notification.
+        VIBRATE               : optional keyboard haptics.
+
+        NOT requested, and never needed: contacts, SMS, storage, location,
+        camera, microphone, accessibility service, query-all-packages.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:name=".HaryanviApp"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.HaryanviAI"
+        android:enableOnBackInvokedCallback="true"
+        tools:targetApi="34">
+
+        <!-- =========================================================
+             Main activity — splash, onboarding, translator, settings
+             ========================================================= -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.HaryanviAI.Splash">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- =========================================================
+             Share-to-translate
+
+             Receives text the user explicitly shared from another app.
+             A separate, translucent activity so it feels like a sheet
+             rather than a cold app launch.
+             ========================================================= -->
+        <activity
+            android:name=".share.ShareTranslateActivity"
+            android:exported="true"
+            android:excludeFromRecents="false"
+            android:label="@string/share_target_label"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.HaryanviAI">
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <!-- Text selected inside another app ("Translate to Haryanvi"). -->
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- =========================================================
+             Haryanvi keyboard (InputMethodService)
+             ========================================================= -->
+        <service
+            android:name=".keyboard.HaryanviInputMethodService"
+            android:exported="true"
+            android:label="@string/keyboard_name"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+
+        <!-- Settings entry Android shows next to the keyboard in system settings -->
+        <activity
+            android:name=".keyboard.KeyboardSettingsActivity"
+            android:exported="true"
+            android:label="@string/keyboard_settings_title"
+            android:theme="@style/Theme.HaryanviAI" />
+
+        <!-- =========================================================
+             Floating translator
+
+             Short-lived foreground service: it runs only while the
+             bubble is visible and stops when the user closes it.
+             ========================================================= -->
+        <service
+            android:name=".floating.FloatingTranslatorService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="true">
+
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-initiated floating translation bubble that stays on screen until dismissed." />
+        </service>
+
+        <!-- No analytics, no ad SDK, no background sync worker. -->
+
+    </application>
+</manifest>
