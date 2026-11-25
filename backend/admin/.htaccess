@@ -1,0 +1,32 @@
+# Admin dashboard.
+#
+# Only index.php and the stylesheet are reachable; the view templates are
+# included by the front controller and must never be requested directly.
+
+Options -Indexes -MultiViews
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Templates are includes, not pages.
+    RewriteRule ^views(/|$) - [F,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "no-referrer"
+    Header always set Cache-Control "no-store, private"
+</IfModule>
+
+DirectoryIndex index.php
+
+# ---------------------------------------------------------------------
+#  Optional extra layer: HTTP basic auth in front of the dashboard.
+#  Create the password file outside the web root, then uncomment:
+#
+#  AuthType Basic
+#  AuthName "Haryanvi AI admin"
+#  AuthUserFile /home/youruser/.htpasswd-admin
+#  Require valid-user
+# ---------------------------------------------------------------------
