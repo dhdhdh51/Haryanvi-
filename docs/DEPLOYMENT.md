@@ -9,11 +9,47 @@ DirectAdmin or anything else that gives you Apache, PHP and MySQL.
 |---|---|
 | PHP | 8.2, with `pdo_mysql`, `openssl`, `curl`, `mbstring`, `json` |
 | MySQL | 8.0 (MariaDB 10.6+ also works) |
-| Web server | Apache with `mod_rewrite` |
+| Web server | Apache with `mod_rewrite`, **or** nginx with the supplied config |
 | SSL | A valid certificate — the app refuses plain HTTP |
 
 No Composer, no Node.js, no shell access strictly required (though the CLI
 tools make setup much easier).
+
+> ### Read this if you are on nginx
+>
+> The backend ships `.htaccess` files. Apache reads them; **nginx ignores them
+> completely.** On a default nginx site that means `/api/v1/*` returns 404 and
+> `database/*.sql` plus `storage/logs/*.log` are publicly downloadable — the
+> SQL includes the seeded administrator's password hash.
+>
+> aaPanel, BT Panel and most VPS images default to nginx. Use
+> [`backend/deploy/nginx-aapanel-rewrite.conf`](../backend/deploy/nginx-aapanel-rewrite.conf)
+> (panel) or
+> [`nginx-vhost.conf.example`](../backend/deploy/nginx-vhost.conf.example)
+> (plain nginx), and verify with the three `curl` checks in
+> [step 9](#9-verify-the-protections-actually-work).
+
+---
+
+## Fastest path: aaPanel, cPanel or any panel with a terminal
+
+If you have shell access, [`backend/deploy/install.sh`](../backend/deploy/install.sh)
+does steps 1–4 below in one command.
+
+```bash
+# 1. In the panel: Website → Add site (domain + PHP 8.2+ + create database)
+# 2. Then, in the panel's Terminal:
+cd /tmp
+curl -fsSLO https://raw.githubusercontent.com/dhdhdh51/Haryanvi-/main/backend/deploy/install.sh
+bash install.sh \
+  --domain haryanvi.yourdomain.com \
+  --db-name haryanvi_ai --db-user haryanvi_user --db-pass 'generated-password'
+# 3. Panel → URL Rewrite: paste deploy/nginx-aapanel-rewrite.conf   (nginx only)
+# 4. Panel → SSL: Let's Encrypt → Apply → Force HTTPS
+```
+
+Details and options: [`backend/deploy/README.md`](../backend/deploy/README.md).
+The manual walkthrough continues below.
 
 ---
 
@@ -54,16 +90,31 @@ public_html/
 └── bin/
 ```
 
-The bundled `.htaccess` files already deny web access to `config/`, `src/`,
-`database/`, `storage/`, `bin/` and `tests/`. Confirm after uploading:
+**On Apache**, the bundled `.htaccess` files already deny web access to
+`config/`, `src/`, `database/`, `storage/`, `bin/` and `tests/`.
+
+**On nginx**, they do nothing. Install the supplied rules now:
+
+- *Panel-managed site* — paste `deploy/nginx-aapanel-rewrite.conf` into
+  Website → *your site* → **URL Rewrite**.
+- *Plain nginx* — use `deploy/nginx-vhost.conf.example` as the server block.
+
+Either way, delete the test suite from a live site — it is not needed and its
+fixtures are not meant to be web-reachable:
 
 ```bash
-curl -I https://your-domain.com/config/config.php     # expect 403
-curl -I https://your-domain.com/src/bootstrap.php     # expect 403
+rm -rf tests
 ```
 
-If either returns 200, `mod_rewrite` or `.htaccess` overrides are disabled —
-stop and fix that before continuing.
+Verify before continuing ([step 9](#9-verify-the-protections-actually-work)
+has the full check):
+
+```bash
+curl -o /dev/null -s -w '%{http_code}\n' https://your-domain.com/database/schema.sql
+```
+
+A `200` here means your sensitive files are public. Stop and fix the web-server
+configuration first.
 
 Make the log directory writable:
 
@@ -360,14 +411,49 @@ script to Roman as a workaround.
 
 ---
 
+## 9. Verify the protections actually work
+
+Run this against the live site. Every line must show **403** or **404** —
+never 200.
+
+```bash
+D=your-domain.com
+
+for path in \
+  database/schema.sql \
+  database/seed.sql \
+  config/config.php \
+  config/config.example.php \
+  src/bootstrap.php \
+  storage/logs/ \
+  bin/provider.php \
+  admin/views/layout.php
+do
+  printf '%s  %s\n' "$(curl -o /dev/null -s -w '%{http_code}' "https://$D/$path")" "$path"
+done
+```
+
+Then confirm the API answers:
+
+```bash
+curl "https://$D/api/v1/health"
+```
+
+`schema.sql` returning 200 is the one to care about most — it contains the
+seeded administrator's password hash. If you see it, your rewrite rules are not
+loaded.
+
+---
+
 ## Security checklist
 
+- [ ] The checks in step 9 all return 403 or 404
 - [ ] `config/config.php` is `chmod 600` and absent from version control
 - [ ] `encryption_key` is set, and unique to this installation
 - [ ] `app.debug` is `false`
 - [ ] `security.force_https` is `true` and SSL is valid
-- [ ] `https://your-domain.com/config/config.php` returns 403
+- [ ] `tests/` has been removed from the live site
 - [ ] The seeded `admin` account is deleted or has a rotated password
 - [ ] `cors_allowed_origins` is empty unless you ship a web client
 - [ ] Database backups are running
-- [ ] `storage/logs` is not readable over HTTP
+- [ ] On nginx: the rewrite rules are installed and saved

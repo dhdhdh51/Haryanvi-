@@ -1,0 +1,127 @@
+# =====================================================================
+#  Haryanvi AI — standalone nginx server block
+# ---------------------------------------------------------------------
+#  For a plain nginx install (no control panel). If you use aaPanel,
+#  cPanel or Plesk, let the panel generate the server block and paste
+#  nginx-aapanel-rewrite.conf into its URL Rewrite box instead.
+#
+#  Install:
+#    cp nginx-vhost.conf.example /etc/nginx/sites-available/haryanvi
+#    ln -s /etc/nginx/sites-available/haryanvi /etc/nginx/sites-enabled/
+#    nginx -t && systemctl reload nginx
+#
+#  Replace: haryanvi.example.com, the root path, and the PHP-FPM socket.
+# =====================================================================
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name haryanvi.example.com;
+
+    # Everything is HTTPS; the API refuses plain HTTP anyway.
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    server_name haryanvi.example.com;
+    root /var/www/haryanvi;
+    index index.php;
+
+    charset utf-8;
+
+    # ---- TLS ---------------------------------------------------------
+    ssl_certificate     /etc/letsencrypt/live/haryanvi.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/haryanvi.example.com/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;
+
+    # ---- Logs --------------------------------------------------------
+    access_log /var/log/nginx/haryanvi.access.log;
+    error_log  /var/log/nginx/haryanvi.error.log;
+
+    # ---- Deny the directories that must never be served -------------
+    # These precede the PHP handler, so a .php file inside them is
+    # refused rather than executed.
+    location ~ ^/(config|src|database|storage|bin|tests)/ {
+        deny all;
+        return 403;
+    }
+
+    location ~ ^/admin/views/ {
+        deny all;
+        return 403;
+    }
+
+    location ~* \.(sql|log|md|example|bak|ini|lock|yml|yaml)$ {
+        deny all;
+        return 403;
+    }
+
+    location ~ /\. {
+        deny all;
+        return 403;
+    }
+
+    # ---- API ---------------------------------------------------------
+    location /api/ {
+        try_files $uri /index.php$is_args$args;
+    }
+
+    # ---- Admin dashboard --------------------------------------------
+    location = /admin {
+        return 301 /admin/;
+    }
+
+    location /admin/ {
+        try_files $uri $uri/ /admin/index.php$is_args$args;
+    }
+
+    # ---- Static assets ----------------------------------------------
+    location ~* \.(css|js|png|jpg|jpeg|gif|svg|webp|woff2?)$ {
+        expires 7d;
+        add_header Cache-Control "public";
+        access_log off;
+        try_files $uri =404;
+    }
+
+    # ---- PHP ---------------------------------------------------------
+    location ~ \.php$ {
+        try_files $uri =404;
+
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+
+        # Bearer auth depends on this reaching PHP. Most builds include
+        # it already; setting it explicitly costs nothing.
+        fastcgi_param HTTP_AUTHORIZATION $http_authorization;
+
+        # Match your PHP-FPM listener:
+        #   Debian/Ubuntu : unix:/run/php/php8.2-fpm.sock
+        #   aaPanel       : unix:/tmp/php-cgi-82.sock
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+        fastcgi_index index.php;
+
+        fastcgi_read_timeout 90s;   # translation waits on an AI provider
+        fastcgi_hide_header X-Powered-By;
+    }
+
+    # ---- Everything else --------------------------------------------
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # The API caps bodies at 64 KB itself; stop larger ones at the edge.
+    client_max_body_size 1m;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+}
