@@ -11,13 +11,22 @@ Android SDK 35 · build-tools 35.0.0
 
 ## Summary
 
-| Suite | Tests | Result |
+| Suite | Assertions | Result |
 |---|---|---|
-| Backend unit | 173 assertions | pass |
-| Backend integration (API) | ~150 assertions | pass |
-| Backend integration (admin dashboard) | ~79 assertions | pass |
-| **Backend total** | **402 assertions** | **pass** |
-| Android unit (JVM) | 42 tests | pass |
+| `ValidatorTest` | 33 | pass |
+| `ProviderParsingTest` | 40 | pass |
+| `PromptBuilderTest` | 30 | pass |
+| `TextGuardTest` | 23 | pass |
+| `CryptoTest` | 18 | pass |
+| `LanguageDetectorTest` | 14 | pass |
+| `SqlPlaceholderTest` | 3 | pass |
+| **Backend unit subtotal** | **161** | **pass** |
+| `ApiTest` (integration) | 110 | pass |
+| `AdminTest` (integration) | 104 | pass |
+| `ProviderFailureTest` (integration) | 27 | pass |
+| **Backend integration subtotal** | **241** | **pass** |
+| **Backend total** | **402** | **pass** |
+| Android unit (JVM), 3 classes | 42 tests | pass |
 | Debug APK build | — | pass (19.1 MB) |
 | Release APK build (R8 + resource shrinking) | — | pass (2.0 MB) |
 | Release signing + signature verification | — | pass (v2 + v3) |
@@ -152,8 +161,23 @@ round trip through `utf8mb4`.
 
 ## Bugs found and fixed
 
-Testing found five real defects. Each is listed with how it would have
-manifested in production.
+Testing and a deployment review found six real defects. Each is listed with how
+it would have manifested in production.
+
+**0. The backend did not work on nginx at all** *(found while reviewing a real
+target server, after the initial delivery)*
+The project shipped `.htaccess` only. Apache reads those files; nginx ignores
+them. On a default aaPanel or BT Panel site — both default to nginx — every
+`/api/v1/*` request returned 404 because nothing rewrote it to `index.php`, and
+`database/schema.sql`, `database/seed.sql` and `storage/logs/*.log` were
+publicly downloadable. The SQL contains the seeded administrator's bcrypt hash.
+`config/config.php` was *not* dumped, because PHP-FPM executes it and it only
+`return`s an array — but that is protection by accident, not by configuration.
+Fixed by adding nginx rules for both panel-managed and standalone installs, an
+installer that strips `tests/` from a live site, and a documented verification
+step that curls every sensitive path and requires 403 or 404. This was the most
+serious issue found in the project, and no test caught it — it took looking at
+the actual server.
 
 **1. Repeated named SQL placeholders (3 occurrences)**
 `WHERE a LIKE :search OR b LIKE :search` fails with `SQLSTATE[HY093]` under
@@ -234,6 +258,16 @@ fold their corrections into the lexicon.
 
 **Not tested at all**
 
+- **The nginx configuration itself.** `deploy/install.sh` was run end to end
+  against a real MySQL instance — clean install, schema and seed loaded
+  (5 dialects, 6 tones, 125 vocabulary entries), `config.php` generated at
+  `chmod 600` with a fresh key, health check reporting `database: connected`,
+  and `--update` verified to preserve the encryption key and all 125 rows. But
+  `nginx -t` was never run and no request has been served through nginx: there
+  was no nginx in the build environment. The rules are written against aaPanel's
+  documented include point and the standard `try_files` pattern, and the
+  `curl` verification in `deploy/README.md` exists precisely because they need
+  confirming on the real server.
 - Load and concurrency. The rate limiter uses an atomic upsert and the quota
   counters use `ON DUPLICATE KEY UPDATE`, so both are safe under concurrent
   requests by construction, but no load test was run.
