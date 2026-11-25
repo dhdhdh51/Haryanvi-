@@ -1,0 +1,85 @@
+# =====================================================================
+#  Haryanvi AI — Apache configuration for shared hosting
+# ---------------------------------------------------------------------
+#  Upload the contents of backend/ into your web root (public_html).
+#  Resulting URLs:
+#     https://your-domain/api/v1/...   -> REST API
+#     https://your-domain/admin/       -> admin dashboard
+# =====================================================================
+
+Options -Indexes -MultiViews
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # ---- Force HTTPS -------------------------------------------------
+    # Most shared hosts terminate TLS at a proxy, so check both signals.
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+    # ---- Never expose sensitive directories --------------------------
+    RewriteRule ^(config|src|database|storage|bin|tests)(/|$) - [F,L]
+
+    # ---- Route the API through the front controller ------------------
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^api/ index.php [QSA,L]
+</IfModule>
+
+# ---------------------------------------------------------------------
+#  Pass the Authorization header to PHP.
+#  CGI/FastCGI strips it by default, which would break bearer auth.
+# ---------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+<IfModule mod_setenvif.c>
+    SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
+# ---------------------------------------------------------------------
+#  Security headers
+# ---------------------------------------------------------------------
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Strict-Transport-Security "max-age=15552000; includeSubDomains" env=HTTPS
+    Header always unset X-Powered-By
+    Header unset Server
+</IfModule>
+
+# ---------------------------------------------------------------------
+#  Block access to dotfiles, backups and SQL dumps
+# ---------------------------------------------------------------------
+<FilesMatch "(^\.|\.(sql|log|md|example|bak|ini|yml|yaml|lock|json)$)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# composer.json / package manifests should also stay private; the rule above
+# covers them. The admin dashboard's own assets are plain .css/.js and
+# therefore unaffected.
+
+# ---------------------------------------------------------------------
+#  PHP hardening (ignored silently if the host disallows php_value)
+# ---------------------------------------------------------------------
+<IfModule mod_php.c>
+    php_flag display_errors off
+    php_flag log_errors on
+    php_value post_max_size 256K
+    php_value upload_max_filesize 128K
+</IfModule>
+
+# ---------------------------------------------------------------------
+#  Default document
+# ---------------------------------------------------------------------
+DirectoryIndex index.php index.html

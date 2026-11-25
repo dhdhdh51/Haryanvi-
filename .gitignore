@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------
+# Secrets — NEVER commit these
+# ---------------------------------------------------------------
+backend/config/config.php
+backend/config/*.local.php
+*.pem
+*.key
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+google-services.json
+.env
+.env.*
+!.env.example
+
+# ---------------------------------------------------------------
+# Backend runtime
+# ---------------------------------------------------------------
+backend/storage/logs/*.log
+backend/storage/cache/*
+!backend/storage/.gitkeep
+!backend/storage/logs/.gitkeep
+!backend/storage/cache/.gitkeep
+vendor/
+composer.lock
+
+# ---------------------------------------------------------------
+# Android / Gradle
+# ---------------------------------------------------------------
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/local.properties
+android/.idea/
+android/.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+.gradle/
+build/
+local.properties
+
+# ---------------------------------------------------------------
+# IDE / OS
+# ---------------------------------------------------------------
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# ---------------------------------------------------------------
+# Local test scaffolding (not part of the deliverable)
+# ---------------------------------------------------------------
+/.localtest/
