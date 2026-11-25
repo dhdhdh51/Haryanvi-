@@ -38,15 +38,21 @@ does steps 1–4 below in one command.
 
 ```bash
 # 1. In the panel: Website → Add site (domain + PHP 8.2+ + create database)
-# 2. Then, in the panel's Terminal:
+
+# 2. Panel → Terminal. This deploys the code, loads the database, writes
+#    config.php, installs the nginx rewrite rules and reloads nginx:
 cd /tmp
 curl -fsSLO https://raw.githubusercontent.com/dhdhdh51/Haryanvi-/main/backend/deploy/install.sh
 bash install.sh \
   --domain haryanvi.yourdomain.com \
   --db-name haryanvi_ai --db-user haryanvi_user --db-pass 'generated-password'
-# 3. Panel → URL Rewrite: paste deploy/nginx-aapanel-rewrite.conf   (nginx only)
-# 4. Panel → SSL: Let's Encrypt → Apply → Force HTTPS
+
+# 3. Panel → SSL: Let's Encrypt → Apply → Force HTTPS
 ```
+
+Only two panel actions are needed — creating the site and issuing the
+certificate — because both require the panel to generate configuration the
+script cannot write safely on its own.
 
 Details and options: [`backend/deploy/README.md`](../backend/deploy/README.md).
 The manual walkthrough continues below.

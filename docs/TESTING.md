@@ -258,16 +258,25 @@ fold their corrections into the lexicon.
 
 **Not tested at all**
 
-- **The nginx configuration itself.** `deploy/install.sh` was run end to end
-  against a real MySQL instance — clean install, schema and seed loaded
-  (5 dialects, 6 tones, 125 vocabulary entries), `config.php` generated at
-  `chmod 600` with a fresh key, health check reporting `database: connected`,
-  and `--update` verified to preserve the encryption key and all 125 rows. But
-  `nginx -t` was never run and no request has been served through nginx: there
-  was no nginx in the build environment. The rules are written against aaPanel's
-  documented include point and the standard `try_files` pattern, and the
-  `curl` verification in `deploy/README.md` exists precisely because they need
-  confirming on the real server.
+- **The nginx configuration serving real traffic.** What *was* verified:
+  `deploy/install.sh` run end to end against a real MySQL instance — clean
+  install, `--create-db` creating the database and user from root, schema and
+  seed loaded (5 dialects, 6 tones, 125 vocabulary entries), `config.php`
+  generated at `chmod 600` with a fresh key, `tests/` stripped, the panel
+  placeholder `index.html` moved aside, health reporting
+  `database: connected`, and `--update` preserving the encryption key and all
+  125 rows. The nginx install branch was exercised with a stubbed `nginx`
+  binary, confirming both outcomes: on `nginx -t` success the rules are written
+  and reloaded; on failure the previous file is **restored and nginx is never
+  reloaded**, so a bad config cannot affect other sites on the box.
+
+  What was **not** verified: a real `nginx -t` against a real aaPanel vhost,
+  and an actual HTTP request served through these rules. There was no nginx and
+  no writable `/www` in the build environment. The rules target aaPanel's
+  documented include point (`/www/server/panel/vhost/rewrite/<domain>.conf`)
+  and use the standard `try_files` pattern, but they need confirming on the
+  server — which is exactly what the `curl` checklist in
+  [`deploy/README.md`](../backend/deploy/README.md) is for.
 - Load and concurrency. The rate limiter uses an atomic upsert and the quota
   counters use `ON DUPLICATE KEY UPDATE`, so both are safe under concurrent
   requests by construction, but no load test was run.

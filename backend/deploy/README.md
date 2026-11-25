@@ -56,21 +56,43 @@ bash install.sh \
   --db-pass  'the-password-the-panel-generated'
 ```
 
-It checks prerequisites, clones the repository, deploys `backend/` into the
-site root, loads `schema.sql` and `seed.sql`, generates `config.php` with a
-fresh encryption key at `chmod 600`, and boots the app to confirm the database
-is reachable. Re-running is safe — an existing `config.php` is never
-overwritten, and a database that already has tables is left alone.
+This does everything except SSL: checks prerequisites, clones the repository,
+deploys `backend/` into the site root, loads `schema.sql` and `seed.sql`,
+generates `config.php` with a fresh encryption key at `chmod 600`, strips
+`tests/`, moves aside the panel's placeholder `index.html`, **installs the
+nginx rewrite rules**, reloads nginx, and boots the app to confirm the database
+is reachable.
 
-**3. Add the nginx rules.** Website → *your site* → **URL Rewrite**, paste all
-of `nginx-aapanel-rewrite.conf`, Save.
+Re-running is safe: an existing `config.php` is never overwritten, a database
+that already has tables is left alone, and the previous deployment is tarred
+into `/www/backup/` first.
 
-Without this step the API returns 404 and your SQL dumps are public.
+If the panel did not create the database for you, add `--create-db`:
 
-**4. Issue SSL.** Website → *your site* → **SSL** → Let's Encrypt → Apply,
-then enable **Force HTTPS**. The API refuses plain HTTP.
+```bash
+bash install.sh --domain haryanvi.yourdomain.com --create-db \
+  --db-name haryanvi_ai --db-user haryanvi_user --db-pass 'choose-a-password'
+```
 
-**5. Finish the setup:**
+That needs MySQL root — via `/root/.my.cnf`, or pass `--db-root-pass`. A
+database created this way will not appear in the panel's Databases list, since
+the panel only tracks what it created itself.
+
+> **About the nginx step.** aaPanel's generated vhost includes
+> `/www/server/panel/vhost/rewrite/<domain>.conf`, so the installer writes the
+> rules straight there rather than asking you to paste them. Any existing file
+> is saved as `.before-haryanvi`, the result is validated with `nginx -t`, and
+> **if the test fails the old file is restored and nginx is never reloaded** —
+> a bad config cannot take down your other sites. If validation fails the
+> script says so, and you can paste the rules into the panel's URL Rewrite box
+> instead.
+>
+> Pass `--no-nginx` to skip this entirely.
+
+**3. Issue SSL.** Website → *your site* → **SSL** → Let's Encrypt → Apply,
+then enable **Force HTTPS**. The API refuses plain HTTP, so this is required.
+
+**4. Finish the setup:**
 
 ```bash
 cd /www/wwwroot/haryanvi.yourdomain.com
@@ -142,5 +164,8 @@ php bin/migrate.php
 | `--branch` | `main` | Branch to deploy |
 | `--db-host` / `--db-port` | `127.0.0.1` / `3306` | Database host |
 | `--db-name` / `--db-user` / `--db-pass` | *required* | Database credentials |
+| `--create-db` | off | Create the database and user (needs MySQL root) |
+| `--db-root-pass` | reads `/root/.my.cnf` | MySQL root password for `--create-db` |
 | `--skip-db` | off | Deploy files only; import SQL yourself |
 | `--update` | off | Redeploy code, keep config and data |
+| `--no-nginx` | off | Do not touch the nginx rewrite config |

@@ -18,8 +18,11 @@
 #    --branch main                              branch to deploy
 #    --repo https://github.com/you/Haryanvi-.git
 #    --db-host 127.0.0.1  --db-port 3306
+#    --create-db          create the database and user too (needs MySQL root)
+#    --db-root-pass PASS  MySQL root password, if not in /root/.my.cnf
 #    --skip-db            site files only, leave the database alone
 #    --update             redeploy code, keep config.php and the database
+#    --no-nginx           do not touch the nginx rewrite config
 #
 #  WHAT THIS SCRIPT DOES NOT DO
 #  It does not create the site or the subdomain. aaPanel has to generate
@@ -43,6 +46,9 @@ DB_USER=""
 DB_PASS=""
 SKIP_DB=0
 UPDATE_ONLY=0
+CREATE_DB=0
+DB_ROOT_PASS=""
+INSTALL_NGINX=1
 
 # ---------------------------------------------------------------------
 #  Output helpers
@@ -76,6 +82,9 @@ while [ $# -gt 0 ]; do
         --db-pass)   DB_PASS="${2:-}"; shift 2 ;;
         --skip-db)   SKIP_DB=1; shift ;;
         --update)    UPDATE_ONLY=1; shift ;;
+        --create-db) CREATE_DB=1; shift ;;
+        --db-root-pass) DB_ROOT_PASS="${2:-}"; shift 2 ;;
+        --no-nginx)  INSTALL_NGINX=0; shift ;;
         -h|--help)   sed -n '2,40p' "$0"; exit 0 ;;
         *)           fail "Unknown option: $1  (try --help)" ;;
     esac
@@ -237,9 +246,45 @@ else
         "$MYSQL_BIN" -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$@" 2>&1
     }
 
+    # --- Optionally create the database and user ---------------------
+    if [ "$CREATE_DB" -eq 1 ]; then
+        mysql_root() {
+            if [ -n "$DB_ROOT_PASS" ]; then
+                "$MYSQL_BIN" -h "$DB_HOST" -P "$DB_PORT" -u root -p"$DB_ROOT_PASS" "$@" 2>&1
+            else
+                # Relies on /root/.my.cnf, which aaPanel usually provides.
+                "$MYSQL_BIN" -h "$DB_HOST" -P "$DB_PORT" -u root "$@" 2>&1
+            fi
+        }
+
+        mysql_root -e "SELECT 1;" >/dev/null 2>&1 \
+            || fail "Cannot connect to MySQL as root, so --create-db cannot run.
+    Either pass --db-root-pass 'the-root-password', or create the database in
+    the panel (Databases → Add database) and re-run without --create-db."
+
+        # CREATE ... IF NOT EXISTS, so re-running is harmless.
+        mysql_root <<SQL >/dev/null 2>&1
+CREATE DATABASE IF NOT EXISTS \`$DB_NAME\`
+    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
+CREATE USER IF NOT EXISTS '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';
+GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost';
+GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'127.0.0.1';
+FLUSH PRIVILEGES;
+SQL
+        if [ $? -eq 0 ]; then
+            ok "Database '$DB_NAME' and user '$DB_USER' ready"
+            note "The panel will not list a database it did not create. To see it"
+            note "in aaPanel, add it there instead and skip --create-db."
+        else
+            fail "Creating the database as root failed. Create it in the panel instead."
+        fi
+    fi
+
     mysql_run -e "SELECT 1;" "$DB_NAME" >/dev/null 2>&1 \
         || fail "Cannot connect to database '$DB_NAME' as '$DB_USER'.
-    Create it first: aaPanel → Databases → Add database, then re-run."
+    Create it first (aaPanel → Databases → Add database), or re-run with
+    --create-db to have this script create it."
     ok "Connected to $DB_NAME"
 
     existing=$(mysql_run -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" | tail -1)
@@ -330,6 +375,78 @@ PHPCONF
 fi
 
 # ---------------------------------------------------------------------
+#  7b. nginx rewrite rules
+# ---------------------------------------------------------------------
+#  aaPanel's generated vhost includes
+#      /www/server/panel/vhost/rewrite/<domain>.conf
+#  inside its server block, so the rules can be installed from here
+#  instead of being pasted into the panel UI.
+#
+#  Every change is backed up and validated with `nginx -t`; if the test
+#  fails the previous file is restored and nginx is left untouched.
+# ---------------------------------------------------------------------
+NGINX_DONE=0
+
+if [ "$INSTALL_NGINX" -eq 0 ]; then
+    step "Skipping nginx configuration (--no-nginx)"
+elif [ ! -d /www/server/panel/vhost/rewrite ]; then
+    step "nginx rewrite rules"
+    note "aaPanel rewrite directory not found — this does not look like aaPanel."
+    note "Apache needs nothing (the .htaccess files handle it)."
+    note "Plain nginx: use deploy/nginx-vhost.conf.example as the server block."
+else
+    step "Installing nginx rewrite rules"
+
+    REWRITE="/www/server/panel/vhost/rewrite/$DOMAIN.conf"
+    SOURCE="$SITE_ROOT/deploy/nginx-aapanel-rewrite.conf"
+
+    if [ ! -f "$SOURCE" ]; then
+        warn "$SOURCE is missing — skipping"
+    elif grep -q "Haryanvi AI" "$REWRITE" 2>/dev/null; then
+        ok "Rules already installed at $REWRITE"
+        NGINX_DONE=1
+    else
+        # Preserve whatever the panel or a previous framework put there.
+        if [ -s "$REWRITE" ]; then
+            cp "$REWRITE" "$REWRITE.before-haryanvi" 2>/dev/null \
+                && note "Previous rewrite file saved as $REWRITE.before-haryanvi"
+        fi
+
+        cp "$SOURCE" "$REWRITE" || fail "Could not write $REWRITE (are you root?)"
+
+        NGINX_BIN="$(command -v nginx 2>/dev/null || true)"
+        [ -n "$NGINX_BIN" ] || NGINX_BIN="/www/server/nginx/sbin/nginx"
+
+        if [ -x "$NGINX_BIN" ]; then
+            if "$NGINX_BIN" -t >/dev/null 2>&1; then
+                if "$NGINX_BIN" -s reload >/dev/null 2>&1; then
+                    ok "Rules installed and nginx reloaded"
+                else
+                    warn "Rules installed, but the reload failed."
+                    note "Reload from the panel: Website → nginx → Reload"
+                fi
+                NGINX_DONE=1
+            else
+                # Roll back rather than leave nginx unable to start.
+                if [ -f "$REWRITE.before-haryanvi" ]; then
+                    mv "$REWRITE.before-haryanvi" "$REWRITE"
+                else
+                    rm -f "$REWRITE"
+                fi
+                warn "nginx -t rejected the new config; it has been rolled back."
+                note "nginx was not reloaded, so your other sites are unaffected."
+                note "Paste deploy/nginx-aapanel-rewrite.conf into the panel's"
+                note "URL Rewrite box instead, and check the error with: nginx -t"
+            fi
+        else
+            warn "nginx binary not found; rules written but not validated"
+            note "Reload from the panel: Website → nginx → Reload"
+            NGINX_DONE=1
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------
 #  8. Local verification
 # ---------------------------------------------------------------------
 step "Verifying the installation"
@@ -370,6 +487,22 @@ cat <<SUMMARY
 
 ${BOLD}Files and database are in place.${RESET}
 
+SUMMARY
+
+if [ "$NGINX_DONE" -eq 1 ]; then
+    cat <<SUMMARY
+${BOLD}nginx rewrite rules: installed.${RESET}
+
+${BOLD}One thing remains, and it needs the panel:${RESET}
+
+  ${BOLD}SSL certificate${RESET}
+     aaPanel → Website → $DOMAIN → SSL → Let's Encrypt → Apply,
+     then switch on "Force HTTPS".
+     The API refuses plain HTTP, so this is not optional.
+
+SUMMARY
+else
+    cat <<SUMMARY
 ${BOLD}Two things remain, and both need the panel:${RESET}
 
   ${BOLD}1. nginx rewrite rules${RESET} ${RED}(required — without these the API returns 404
@@ -384,6 +517,10 @@ ${BOLD}Two things remain, and both need the panel:${RESET}
      aaPanel → Website → $DOMAIN → SSL → Let's Encrypt → Apply,
      then switch on "Force HTTPS".
 
+SUMMARY
+fi
+
+cat <<SUMMARY
 ${BOLD}Then finish the setup:${RESET}
 
   curl https://$DOMAIN/api/v1/health
