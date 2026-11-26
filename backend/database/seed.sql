@@ -76,6 +76,24 @@ VALUES
   'Northern Haryana in contact with Punjabi. Deswali grammar with a distinct northern cadence.',
   'Use northern Haryanvi from the Jind–Kaithal belt. Grammar follows the Deswali core, with a northern cadence shaped by contact with Punjabi.\n- Keep सै/सूं/सैं, कोन्या, बेरा, घणा, कित, कद, इब, फेर — the Deswali backbone is intact.\n- The Punjabi influence is in rhythm, intonation and emphasis, NOT in vocabulary.\n- CRITICAL: do NOT insert Punjabi words (no ਕੀ/की for क्या, no हैगा, no तुसी, no असी, no "ਜੀ"-style tags). The output must read as Haryanvi to a Haryana speaker.\n- Slightly more emphatic sentence-final particles are natural: "चाल ना", "सुण ले".',
   1, 0, 50
+),
+(
+  'faridabad_ballabhgarh',
+  'Faridabad & Ballabhgarh',
+  'फरीदाबाद व बल्लभगढ़',
+  'Faridabad, Ballabhgarh, Delhi-adjacent NCR (eastern Haryana)',
+  'Delhi-adjacent NCR Haryana. Urban, industrial belt with light, Khari Boli-leaning Haryanvi.',
+  'Use the light, Delhi-adjacent Haryanvi of the Faridabad-Ballabhgarh NCR belt. This is an urban, industrial region, so the speech is softer and closer to Khari Boli than the Deswali core.\n- सै is natural, but है is equally common in everyday NCR speech — keep a light touch and do not over-ruralise.\n- Prefer ना for ordinary negation; कोन्या is understood but used sparingly here.\n- Keep the Haryanvi function words (के, क्यूं, कित, कद, इब, फेर, घणा, बेरा) so it still reads as Haryanvi, while the overall rhythm stays close to standard Hindi.\n- Urban and workplace loanwords (ऑफिस, फैक्ट्री, कंपनी, मोबाइल, बस, मेट्रो, कॉलेज) are completely natural — keep them, never force a rustic substitute.\n- Any older Braj colouring survives only in cadence, not vocabulary; do NOT import Braj or Punjabi words a Haryana speaker would not use.\n- Ideal for messages to city friends, colleagues and family across the Delhi-Faridabad NCR corridor.',
+  1, 0, 60
+),
+(
+  'palwal',
+  'Palwal',
+  'पलवल',
+  'Palwal, Hodal, Hathin (southern NCR, Mewat/Braj border)',
+  'Southern Haryana below Faridabad, where Haryanvi meets Mewati and Braj. Softer border cadence.',
+  'Use the southern Haryanvi of the Palwal belt (Palwal, Hodal, Hathin), which sits where Haryanvi meets Mewati (toward Nuh/Mewat) and Braj (across the Yamuna toward Mathura).\n- Keep the Haryanvi backbone: सै/सूं/सैं, ना/कोन्या, बेरा, घणा, कित, कद, इब, फेर.\n- The Mewati and Braj contact shows up as a softer, sing-song cadence and gentler sentence endings — NOT as vocabulary.\n- CRITICAL: do not import Mewati or Braj words or forms. The output must read as Haryanvi to a Haryana speaker, just with a lighter southern touch.\n- Both है and सै occur; lean to सै for a clearly Haryanvi feel but keep it natural and unforced.\n- Everyday loanwords (बस, फोन, स्कूल, मंडी) are fine and expected.\n- Good for messages around the Palwal-Hodal belt and the southern NCR edge.',
+  1, 0, 70
 );
 
 -- =====================================================================
