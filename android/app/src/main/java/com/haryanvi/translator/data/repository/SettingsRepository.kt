@@ -146,6 +146,8 @@ class SettingsRepository(
      */
     suspend fun setFloatingEnabled(enabled: Boolean) = prefs.setFloatingEnabled(enabled)
 
+    suspend fun setInstantMode(enabled: Boolean) = prefs.setInstantMode(enabled)
+
     /**
      * Turning history off clears stored translations on the server too; the
      * caller is responsible for wiping the local copy.

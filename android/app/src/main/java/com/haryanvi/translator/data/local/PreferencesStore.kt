@@ -73,6 +73,11 @@ class PreferencesStore(private val context: Context) {
         context.dataStore.edit { it[KEY_INCLUDE_ROMAN] = include }
     }
 
+    /** Device-local: use the instant rule-based engine instead of the AI. */
+    suspend fun setInstantMode(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_INSTANT_MODE] = enabled }
+    }
+
     suspend fun setDefaultSourceLang(lang: String) {
         context.dataStore.edit { it[KEY_SOURCE_LANG] = lang }
     }
@@ -151,6 +156,7 @@ class PreferencesStore(private val context: Context) {
         floatingEnabled = this[KEY_FLOATING] ?: false,
         keyboardHaptics = this[KEY_HAPTICS] ?: true,
         maxInputChars = this[KEY_MAX_CHARS] ?: 1200,
+        instantMode = this[KEY_INSTANT_MODE] ?: false,
     )
 
     private companion object {
@@ -169,6 +175,7 @@ class PreferencesStore(private val context: Context) {
         val KEY_FLOATING = booleanPreferencesKey("floating_enabled")
         val KEY_HAPTICS = booleanPreferencesKey("keyboard_haptics")
         val KEY_MAX_CHARS = intPreferencesKey("max_input_chars")
+        val KEY_INSTANT_MODE = booleanPreferencesKey("instant_mode")
 
         val KEY_APP_NAME = stringPreferencesKey("app_name")
         val KEY_PRIVACY_POLICY = stringPreferencesKey("privacy_policy")
@@ -189,6 +196,8 @@ data class LocalPreferences(
     val floatingEnabled: Boolean = false,
     val keyboardHaptics: Boolean = true,
     val maxInputChars: Int = 1200,
+    /** Instant rule-based translation (no AI). Device-local only. */
+    val instantMode: Boolean = false,
 )
 
 data class CachedAppInfo(

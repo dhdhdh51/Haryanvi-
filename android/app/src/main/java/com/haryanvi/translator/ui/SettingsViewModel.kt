@@ -86,6 +86,10 @@ class SettingsViewModel(
 
     fun setIncludeRoman(include: Boolean) = runPreference { settings.setIncludeRoman(include) }
 
+    fun setInstantMode(enabled: Boolean) {
+        viewModelScope.launch { settings.setInstantMode(enabled) }
+    }
+
     fun setDefaultSourceLang(lang: String) = runPreference { settings.setDefaultSourceLang(lang) }
 
     fun setCloudSync(enabled: Boolean) = runPreference {

@@ -10,10 +10,12 @@ use Haryanvi\Core\Response;
 use Haryanvi\Core\RouteContext;
 use Haryanvi\Core\Validator;
 use Haryanvi\Models\TranslationRequest;
+use Haryanvi\Models\TranslationResult;
 use Haryanvi\Repositories\DialectRepository;
 use Haryanvi\Repositories\HistoryRepository;
 use Haryanvi\Repositories\UserRepository;
 use Haryanvi\Services\LanguageDetector;
+use Haryanvi\Services\QuickTranslator;
 use Haryanvi\Services\QuotaService;
 use Haryanvi\Services\SettingsService;
 use Haryanvi\Services\TranslationService;
@@ -50,6 +52,8 @@ final class TranslateController
         $toneCode     = $v->string('tone', false, 0, 40);
         $outputScript = $v->enum('output_script', ['devanagari', 'roman'], false, '');
         $channel      = $v->enum('channel', self::CHANNELS, false, 'app');
+        // 'ai' = model translation (default); 'quick' = instant rule-based, no AI.
+        $mode         = $v->enum('mode', ['ai', 'quick'], false, 'ai');
         $saveHistory  = $request->input('save_history');
         $v->assert();
 
@@ -60,8 +64,10 @@ final class TranslateController
         }
 
         // Server-side quota. Checked before the AI call, never trusted from
-        // the client.
-        $this->quota->assertWithinQuota($user);
+        // the client. Quick mode costs nothing, so it is not counted.
+        if ($mode === 'ai') {
+            $this->quota->assertWithinQuota($user);
+        }
 
         $settings = $this->users->settings($user->id);
 
@@ -107,7 +113,39 @@ final class TranslateController
             $channel
         );
 
-        $result = $this->translator->translate($translationRequest, $user->id);
+        $engine = 'ai';
+
+        if ($mode === 'quick') {
+            $result = $this->quickResult($text, $detected);
+
+            if ($result === null) {
+                throw ApiException::validation(
+                    'Instant mode works with Hindi or Hinglish text only. Turn Instant mode off to translate English.',
+                    ['text' => 'Instant mode cannot translate English.']
+                );
+            }
+
+            $engine = 'quick';
+        } else {
+            try {
+                $result = $this->translator->translate($translationRequest, $user->id);
+            } catch (ApiException $e) {
+                // AI unavailable: fall back to the instant engine for Hindi
+                // and Hinglish so the user still gets an answer. English has
+                // no rule-based path, so the original error stands.
+                if (!in_array($e->errorCode(), ['AI_PROVIDER_FAILED', 'AI_PROVIDER_NOT_CONFIGURED'], true)) {
+                    throw $e;
+                }
+
+                $result = $this->quickResult($text, $detected);
+
+                if ($result === null) {
+                    throw $e;
+                }
+
+                $engine = 'quick';
+            }
+        }
 
         /* ---- History: only with consent ------------------------------- */
         $userWantsHistory = (bool) ($settings['save_history'] ?? true);
@@ -131,7 +169,7 @@ final class TranslateController
                 $script,
                 $result->translatedText,
                 $result->romanText,
-                $result->providerId,
+                $engine === 'quick' ? null : $result->providerId,
                 $result->model,
                 $channel
             );
@@ -151,12 +189,40 @@ final class TranslateController
                 'tone'            => $tone->toArray(),
                 'history_id'      => $historyId,
                 'saved_to_history' => $historyId !== null,
+                'engine'          => $engine,
             ],
             200,
             [
                 'latency_ms' => $result->latencyMs,
                 'usage'      => $this->quota->snapshot($user),
             ]
+        );
+    }
+
+    /**
+     * Run the rule-based engine and wrap it in the same result type the AI
+     * path returns, so the rest of the controller stays identical.
+     */
+    private function quickResult(string $text, string $detected): ?TranslationResult
+    {
+        $started = microtime(true);
+        $quick   = QuickTranslator::translate($text, $detected);
+
+        if ($quick === null) {
+            return null;
+        }
+
+        return new TranslationResult(
+            $quick['haryanvi'],
+            $quick['roman'],
+            $detected,
+            0,
+            'Instant (rules)',
+            'quick-rules',
+            0,
+            0,
+            (int) round((microtime(true) - $started) * 1000),
+            1,
         );
     }
 }

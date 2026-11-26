@@ -152,6 +152,16 @@ fun SettingsScreen(
                 onCheckedChange = viewModel::setIncludeRoman,
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
+
+            SettingSwitch(
+                title = "Instant mode (no AI)",
+                description = "Translate instantly with built-in rules. Works for Hindi and " +
+                    "Hinglish only, and is simpler than the AI. Turn off for English or " +
+                    "the best quality.",
+                checked = prefs.instantMode,
+                onCheckedChange = viewModel::setInstantMode,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
         }
 
         /* ---- Input surfaces ----------------------------------------- */

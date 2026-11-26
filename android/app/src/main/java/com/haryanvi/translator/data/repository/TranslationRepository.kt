@@ -115,6 +115,7 @@ class TranslationRepository(
             put("tone", tone ?: preferences.tone)
             put("output_script", outputScript ?: preferences.outputScript)
             put("channel", channel.apiValue)
+            put("mode", if (preferences.instantMode) "quick" else "ai")
             // Honour the local privacy switch immediately, without waiting for
             // the account setting to round-trip.
             put("save_history", preferences.saveHistory)
