@@ -402,12 +402,14 @@ else
 
     if [ ! -f "$SOURCE" ]; then
         warn "$SOURCE is missing — skipping"
-    elif grep -q "Haryanvi AI" "$REWRITE" 2>/dev/null; then
-        ok "Rules already installed at $REWRITE"
+    elif [ -f "$REWRITE" ] && cmp -s "$SOURCE" "$REWRITE"; then
+        # Byte-identical to the shipped rules — nothing to do.
+        ok "Rules already current at $REWRITE"
         NGINX_DONE=1
     else
-        # Preserve whatever the panel or a previous framework put there.
-        if [ -s "$REWRITE" ]; then
+        # Preserve the ORIGINAL (panel/framework) rewrite once; do not let a
+        # later re-run clobber that first backup with our own rules.
+        if [ -s "$REWRITE" ] && [ ! -f "$REWRITE.before-haryanvi" ]; then
             cp "$REWRITE" "$REWRITE.before-haryanvi" 2>/dev/null \
                 && note "Previous rewrite file saved as $REWRITE.before-haryanvi"
         fi

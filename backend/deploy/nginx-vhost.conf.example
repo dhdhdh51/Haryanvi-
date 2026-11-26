@@ -48,24 +48,24 @@ server {
     error_log  /var/log/nginx/haryanvi.error.log;
 
     # ---- Deny the directories that must never be served -------------
-    # These precede the PHP handler, so a .php file inside them is
-    # refused rather than executed.
-    location ~ ^/(config|src|database|storage|bin|tests)/ {
-        deny all;
-        return 403;
-    }
-
-    location ~ ^/admin/views/ {
-        deny all;
-        return 403;
-    }
+    # `^~` prefix locations take precedence over the `\.php$` regex
+    # handler, so even a PHP file inside these directories is refused
+    # rather than executed.
+    location ^~ /config/      { deny all; return 403; }
+    location ^~ /src/         { deny all; return 403; }
+    location ^~ /database/    { deny all; return 403; }
+    location ^~ /storage/     { deny all; return 403; }
+    location ^~ /bin/         { deny all; return 403; }
+    location ^~ /tests/       { deny all; return 403; }
+    location ^~ /deploy/      { deny all; return 403; }
+    location ^~ /admin/views/ { deny all; return 403; }
 
     location ~* \.(sql|log|md|example|bak|ini|lock|yml|yaml)$ {
         deny all;
         return 403;
     }
 
-    location ~ /\. {
+    location ~ /\.(?!well-known) {
         deny all;
         return 403;
     }
