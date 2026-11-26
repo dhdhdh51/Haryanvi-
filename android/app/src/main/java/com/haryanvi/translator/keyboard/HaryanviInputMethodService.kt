@@ -20,6 +20,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.inputmethodservice.InputMethodService
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import com.haryanvi.translator.HaryanviApp
 import com.haryanvi.translator.R
 import com.haryanvi.translator.data.remote.ApiResult
@@ -90,6 +93,9 @@ class HaryanviInputMethodService : InputMethodService() {
     }
 
     override fun onCreateInputView(): View {
+        val sidePadding = dp(3)
+        val bottomPadding = dp(6)
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(ContextCompat.getColor(context, R.color.hy_keyboard_bg))
@@ -97,7 +103,24 @@ class HaryanviInputMethodService : InputMethodService() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             )
-            setPadding(dp(3), dp(5), dp(3), dp(6))
+            setPadding(sidePadding, dp(5), sidePadding, bottomPadding)
+        }
+
+        // targetSdk 35 (Android 15) forces edge-to-edge, so the input window
+        // now draws behind the system navigation bar. Without this the bottom
+        // key row sits underneath the gesture pill / nav buttons. Lift the
+        // keyboard by whatever the navigation bar occupies on each edge; on
+        // devices that still reserve space for the nav bar the inset is 0, so
+        // the layout is unchanged there. Left/right are handled too so a
+        // landscape side nav bar does not clip the outer keys.
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            view.updatePadding(
+                left = sidePadding + navBars.left,
+                right = sidePadding + navBars.right,
+                bottom = bottomPadding + navBars.bottom,
+            )
+            insets
         }
 
         // Status strip: shows what the keyboard is doing, and carries the
