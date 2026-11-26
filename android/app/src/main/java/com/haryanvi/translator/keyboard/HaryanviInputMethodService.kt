@@ -1,5 +1,6 @@
 package com.haryanvi.translator.keyboard
 
+import android.annotation.SuppressLint
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -10,6 +11,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.text.TextUtils
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -17,6 +19,7 @@ import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.PopupWindow
 import android.widget.TextView
 import android.inputmethodservice.InputMethodService
 import androidx.core.content.ContextCompat
@@ -75,6 +78,10 @@ class HaryanviInputMethodService : InputMethodService() {
     private var rootView: LinearLayout? = null
     private var statusView: TextView? = null
     private var keyboardContainer: LinearLayout? = null
+
+    // Gboard-style key-press preview bubble (reused across key presses).
+    private var keyPreviewPopup: PopupWindow? = null
+    private var keyPreviewLabel: TextView? = null
 
     private var hapticsEnabled = true
 
@@ -213,6 +220,7 @@ class HaryanviInputMethodService : InputMethodService() {
         super.onFinishInput()
 
         // Leaving the field drops everything held in memory.
+        hideKeyPreview()
         undoSnapshot = null
         isTranslating = false
         translateAllowed = false
@@ -220,6 +228,9 @@ class HaryanviInputMethodService : InputMethodService() {
 
     override fun onDestroy() {
         scope.cancel()
+        hideKeyPreview()
+        keyPreviewPopup = null
+        keyPreviewLabel = null
         rootView = null
         statusView = null
         keyboardContainer = null
@@ -236,8 +247,13 @@ class HaryanviInputMethodService : InputMethodService() {
 
         container.removeAllViews()
 
+        // Persistent number row on the letter layers, the way Gboard shows it.
+        if (layer == KeyboardLayer.DEVANAGARI || layer == KeyboardLayer.QWERTY) {
+            container.addView(buildRow(KeyboardLayouts.numberRow, dp(NUM_ROW_HEIGHT_DP)))
+        }
+
         KeyboardLayouts.lettersFor(layer).forEach { row ->
-            container.addView(buildRow(row))
+            container.addView(buildRow(row, dp(KEY_HEIGHT_DP)))
         }
 
         container.addView(
@@ -246,18 +262,19 @@ class HaryanviInputMethodService : InputMethodService() {
                     layer = layer,
                     translateEnabled = translateAllowed && !isTranslating,
                     canUndo = undoSnapshot != null,
-                )
+                ),
+                dp(KEY_HEIGHT_DP),
             )
         )
     }
 
-    private fun buildRow(keys: List<Key>): LinearLayout {
+    private fun buildRow(keys: List<Key>, heightPx: Int): LinearLayout {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(KEY_HEIGHT_DP),
-            ).apply { topMargin = dp(3) }
+                heightPx,
+            ).apply { topMargin = dp(4) }
         }
 
         keys.forEach { key -> row.addView(buildKey(key)) }
@@ -265,18 +282,20 @@ class HaryanviInputMethodService : InputMethodService() {
         return row
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun buildKey(key: Key): View {
         val isTranslateKey = key.action is KeyAction.Translate
         val enabled = !isTranslateKey || (translateAllowed && !isTranslating)
 
-        val label = TextView(this).apply {
-            val keyAction = key.action
+        val keyAction = key.action
+        val labelText = when {
+            keyAction is KeyAction.Space -> ""
+            keyAction is KeyAction.Char && shifted -> keyAction.shifted
+            else -> key.label
+        }
 
-            text = when {
-                keyAction is KeyAction.Space -> ""
-                keyAction is KeyAction.Char && shifted -> keyAction.shifted
-                else -> key.label
-            }
+        val label = TextView(this).apply {
+            text = labelText
 
             textSize = when {
                 isTranslateKey -> 15f
@@ -306,6 +325,15 @@ class HaryanviInputMethodService : InputMethodService() {
             KeyStyle.NORMAL -> R.drawable.key_background
         }
 
+        // The alternate (long-press) face, shown faintly in the corner the way
+        // Gboard surfaces secondary characters. Only on Devanagari letters,
+        // where the shifted face is a genuinely different glyph.
+        val hintFace = key.hint
+        val showHint = hintFace != null &&
+            layer == KeyboardLayer.DEVANAGARI &&
+            key.style == KeyStyle.NORMAL &&
+            !shifted
+
         return FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, key.weight)
                 .apply {
@@ -326,9 +354,44 @@ class HaryanviInputMethodService : InputMethodService() {
                 )
             )
 
+            if (showHint) {
+                addView(
+                    TextView(this@HaryanviInputMethodService).apply {
+                        text = hintFace
+                        textSize = 9f
+                        setTextColor(ContextCompat.getColor(context, R.color.hy_text_faint))
+                        includeFontPadding = false
+                        maxLines = 1
+                    },
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        Gravity.TOP or Gravity.END,
+                    ).apply {
+                        topMargin = dp(2)
+                        marginEnd = dp(5)
+                    }
+                )
+            }
+
             contentDescription = describeKey(key)
 
             if (enabled) {
+                // Floating preview bubble while a character key is held, then
+                // gone on release. Returns false so the click still fires.
+                if (keyAction is KeyAction.Char) {
+                    setOnTouchListener { view, event ->
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN ->
+                                showKeyPreview(view, if (shifted) keyAction.shifted else keyAction.value)
+
+                            MotionEvent.ACTION_UP,
+                            MotionEvent.ACTION_CANCEL -> hideKeyPreview()
+                        }
+                        false
+                    }
+                }
+
                 setOnClickListener {
                     vibrate()
                     handle(key.action)
@@ -340,6 +403,7 @@ class HaryanviInputMethodService : InputMethodService() {
                 if (action is KeyAction.Char && action.shifted != action.value) {
                     setOnLongClickListener {
                         vibrate()
+                        hideKeyPreview()
                         commit(action.shifted)
                         true
                     }
@@ -361,6 +425,53 @@ class HaryanviInputMethodService : InputMethodService() {
                 }
             }
         }
+    }
+
+    /* ----------------------------------------------------------------
+     | Key-press preview — a floating bubble above the pressed key.
+     | Wrapped in runCatching so a popup failure can never break typing.
+     * -------------------------------------------------------------- */
+
+    private fun showKeyPreview(anchor: View, text: String) {
+        if (text.isBlank()) return
+
+        runCatching {
+            val labelView = keyPreviewLabel ?: TextView(this).apply {
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                isAllCaps = false
+                maxLines = 1
+                setTextColor(ContextCompat.getColor(context, R.color.hy_text))
+                setBackgroundResource(R.drawable.key_preview_bg)
+            }.also { keyPreviewLabel = it }
+
+            labelView.text = text
+            labelView.textSize = if (layer == KeyboardLayer.EMOJI) 22f else 28f
+
+            val width = dp(46)
+            val height = dp(54)
+
+            val popup = keyPreviewPopup ?: PopupWindow(labelView, width, height).apply {
+                isClippingEnabled = false
+                isTouchable = false
+                isFocusable = false
+            }.also { keyPreviewPopup = it }
+
+            val location = IntArray(2)
+            anchor.getLocationInWindow(location)
+            val x = location[0] + (anchor.width - width) / 2
+            val y = location[1] - height - dp(4)
+
+            if (popup.isShowing) {
+                popup.update(x, y, width, height)
+            } else {
+                popup.showAtLocation(anchor, Gravity.NO_GRAVITY, x, y)
+            }
+        }
+    }
+
+    private fun hideKeyPreview() {
+        runCatching { keyPreviewPopup?.dismiss() }
     }
 
     private fun describeKey(key: Key): String = when (key.action) {
@@ -676,7 +787,8 @@ class HaryanviInputMethodService : InputMethodService() {
         (value * resources.displayMetrics.density).roundToInt()
 
     private companion object {
-        const val KEY_HEIGHT_DP = 50
+        const val KEY_HEIGHT_DP = 46
+        const val NUM_ROW_HEIGHT_DP = 38
         const val MAX_FIELD_CHARS = 1200
         const val STATUS_RESET_MS = 2600L
         const val HAPTIC_MS = 12L

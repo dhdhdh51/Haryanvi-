@@ -65,7 +65,7 @@ class SettingsViewModel(
 
     fun refresh() {
         viewModelScope.launch {
-            translations.loadDialects()
+            translations.loadDialects(force = true)
             settings.loadAppSettings(authenticated = auth.isSignedIn)
 
             if (auth.isSignedIn) {

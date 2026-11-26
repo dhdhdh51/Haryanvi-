@@ -66,6 +66,12 @@ enum class KeyboardLayer { DEVANAGARI, QWERTY, SYMBOLS, EMOJI }
 object KeyboardLayouts {
 
     /* ----------------------------------------------------------------
+     | Persistent number row, shown above the letters on the Devanagari
+     | and QWERTY layers — the way Gboard presents digits.
+     * -------------------------------------------------------------- */
+    val numberRow: List<Key> = "1234567890".map { charKey(it.toString()) }
+
+    /* ----------------------------------------------------------------
      | Devanagari — arranged for Hindi/Haryanvi typing.
      | The shifted face of each key carries the related aspirated or
      | long-vowel form, which is how Indic phone keyboards behave.

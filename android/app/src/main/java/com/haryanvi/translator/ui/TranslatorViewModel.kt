@@ -54,7 +54,9 @@ class TranslatorViewModel(
 
     init {
         viewModelScope.launch {
-            translations.loadDialects()
+            // Always re-fetch so dialects added on the server show up without
+            // needing a reinstall.
+            translations.loadDialects(force = true)
         }
 
         viewModelScope.launch {
